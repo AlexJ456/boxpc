@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const phase = state.count;
         const size = Math.min(canvas.width, canvas.height) * 0.6;
         const left = (canvas.width - size) / 2;
-        const top = (canvas.height - size) / 2 + (canvas.height * 0.1); // Updated for PC
+        const top = (canvas.height - size) / 2 + (canvas.height * 0.1);
         const points = [
             {x: left, y: top + size},       // Bottom-left
             {x: left, y: top},             // Top-left
@@ -187,7 +187,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function render() {
         let html = `
-            <h1>Box Breathing</h1>
+            <h1>Box Breathing</h1> <!-- Moved title above the box -->
+            <div id="box-container">
+                <canvas id="box-canvas"></canvas>
+            </div>
         `;
         if (state.isPlaying) {
             html += `
@@ -311,4 +314,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateOfflineStatus();
+
+    // Added for PWA installation prompt
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        showInstallPromotion();
+    });
+
+    function showInstallPromotion() {
+        const installButton = document.createElement('button');
+        installButton.textContent = 'Install App';
+        installButton.style.position = 'fixed';
+        installButton.style.bottom = '10px';
+        installButton.style.right = '10px';
+        installButton.style.zIndex = '1000';
+        installButton.addEventListener('click', () => {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                } else {
+                    console.log('User dismissed the install prompt');
+                }
+                deferredPrompt = null;
+            });
+        });
+        document.body.appendChild(installButton);
+    }
 });
