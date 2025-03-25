@@ -2,9 +2,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = document.getElementById('app-content');
     const canvas = document.getElementById('box-canvas');
     const container = document.querySelector('.container');
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-    
+
+    // Check if canvas exists
+    if (!canvas) {
+        console.error('Canvas not found');
+        return;
+    }
+
+    // Function to set canvas size based on container dimensions
+    function setCanvasSize() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        console.log('Canvas size set to:', canvas.width, 'x', canvas.height);
+    }
+
+    // Set initial canvas size and update on window resize
+    setCanvasSize();
+    window.addEventListener('resize', setCanvasSize);
+
     const state = {
         isPlaying: false,
         count: 0,
@@ -14,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timeLimit: '',
         sessionComplete: false,
         timeLimitReached: false,
-        phaseTime: 4 // Added phaseTime with default 4 seconds
+        phaseTime: 4 // Default phase time in seconds
     };
 
     const icons = {
@@ -186,12 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function render() {
-        let html = `
-            <h1>Box Breathing</h1> <!-- Moved title above the box -->
-            <div id="box-container">
-                <canvas id="box-canvas"></canvas>
-            </div>
-        `;
+        let html = ''; // Title is now in HTML, so start with empty string
         if (state.isPlaying) {
             html += `
                 <div class="timer">Total Time: ${formatTime(state.totalTime)}</div>
@@ -271,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         app.innerHTML = html;
 
+        // Add event listeners after rendering
         if (!state.sessionComplete) {
             document.getElementById('toggle-play').addEventListener('click', togglePlay);
         }
@@ -296,26 +307,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Initial render
     render();
 
-    // Added for offline notification
+    // Offline notification handling
     window.addEventListener('online', updateOfflineStatus);
     window.addEventListener('offline', updateOfflineStatus);
 
     function updateOfflineStatus() {
         const offlineNotification = document.getElementById('offline-notification');
         if (offlineNotification) {
-            if (!navigator.onLine) {
-                offlineNotification.style.display = 'block';
-            } else {
-                offlineNotification.style.display = 'none';
-            }
+            offlineNotification.style.display = navigator.onLine ? 'none' : 'block';
         }
     }
 
     updateOfflineStatus();
 
-    // Added for PWA installation prompt
+    // PWA installation prompt
     let deferredPrompt;
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
