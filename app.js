@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isPlaying = !state.isPlaying;
         if (state.isPlaying) {
             state.totalTime = 0;
-            state.countdown = state.phaseTime; // Use phaseTime instead of hardcoded 4
+            state.countdown = state.phaseTime;
             state.count = 0;
             state.sessionComplete = false;
             state.timeLimitReached = false;
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetToStart() {
         state.isPlaying = false;
         state.totalTime = 0;
-        state.countdown = state.phaseTime; // Use phaseTime
+        state.countdown = state.phaseTime;
         state.count = 0;
         state.sessionComplete = false;
         state.timeLimit = '';
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.timeLimit = minutes.toString();
         state.isPlaying = true;
         state.totalTime = 0;
-        state.countdown = state.phaseTime; // Use phaseTime
+        state.countdown = state.phaseTime;
         state.count = 0;
         state.sessionComplete = false;
         state.timeLimitReached = false;
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (state.countdown === 1) {
                 state.count = (state.count + 1) % 4;
-                state.countdown = state.phaseTime; // Reset to phaseTime
+                state.countdown = state.phaseTime;
                 playTone();
                 if (state.count === 3 && state.timeLimitReached) {
                     state.sessionComplete = true;
@@ -154,12 +154,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const ctx = canvas.getContext('2d');
         const elapsed = (performance.now() - lastStateUpdate) / 1000;
         const effectiveCountdown = state.countdown - elapsed;
-        let progress = (state.phaseTime - effectiveCountdown) / state.phaseTime; // Use phaseTime
+        let progress = (state.phaseTime - effectiveCountdown) / state.phaseTime;
         progress = Math.max(0, Math.min(1, progress));
         const phase = state.count;
         const size = Math.min(canvas.width, canvas.height) * 0.6;
         const left = (canvas.width - size) / 2;
-        const top = (canvas.height - size) / 2 + 120;
+        const top = (canvas.height - size) / 2 + (canvas.height * 0.1); // Updated for PC
         const points = [
             {x: left, y: top + size},       // Bottom-left
             {x: left, y: top},             // Top-left
@@ -171,15 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentX = startPoint.x + progress * (endPoint.x - startPoint.x);
         const currentY = startPoint.y + progress * (endPoint.y - startPoint.y);
 
-        // Clear the canvas each frame
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw the static orange square
         ctx.strokeStyle = '#d97706';
         ctx.lineWidth = 2;
         ctx.strokeRect(left, top, size, size);
 
-        // Draw the bright red dot
         ctx.beginPath();
         ctx.arc(currentX, currentY, 5, 0, 2 * Math.PI);
         ctx.fillStyle = '#ff0000';
@@ -238,7 +235,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </button>
             `;
         }
-        // Add slider below the Start button on homepage
         if (!state.isPlaying && !state.sessionComplete) {
             html += `
                 <div class="slider-container">
@@ -286,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.setAttribute('readonly', 'readonly');
                 setTimeout(() => this.removeAttribute('readonly'), 0);
             });
-            // Add event listener for the slider
             const phaseTimeSlider = document.getElementById('phase-time-slider');
             phaseTimeSlider.addEventListener('input', function() {
                 state.phaseTime = parseInt(this.value);
@@ -299,4 +294,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     render();
+
+    // Added for offline notification
+    window.addEventListener('online', updateOfflineStatus);
+    window.addEventListener('offline', updateOfflineStatus);
+
+    function updateOfflineStatus() {
+        const offlineNotification = document.getElementById('offline-notification');
+        if (offlineNotification) {
+            if (!navigator.onLine) {
+                offlineNotification.style.display = 'block';
+            } else {
+                offlineNotification.style.display = 'none';
+            }
+        }
+    }
+
+    updateOfflineStatus();
 });
