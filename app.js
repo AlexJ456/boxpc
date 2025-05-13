@@ -2,24 +2,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = document.getElementById('app-content');
     const canvas = document.getElementById('box-canvas');
     const container = document.querySelector('.container');
-
-    // Check if canvas exists
-    if (!canvas) {
-        console.error('Canvas not found');
-        return;
-    }
-
-    // Function to set canvas size based on container dimensions
-    function setCanvasSize() {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        console.log('Canvas size set to:', canvas.width, 'x', canvas.height);
-    }
-
-    // Set initial canvas size and update on window resize
-    setCanvasSize();
-    window.addEventListener('resize', setCanvasSize);
-
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    
     const state = {
         isPlaying: false,
         count: 0,
@@ -29,8 +14,12 @@ document.addEventListener('DOMContentLoaded', () => {
         timeLimit: '',
         sessionComplete: false,
         timeLimitReached: false,
-        phaseTime: 4 // Default phase time in seconds
+        phaseTime: 4,
+        pulseStartTime: null
     };
+
+    let wakeLock = null;
+    let audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
     const icons = {
         play: `<svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`,
@@ -58,9 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function playTone() {
-        if (state.soundEnabled) {
+        if (state.soundEnabled && audioContext) {
             try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
@@ -77,9 +65,40 @@ document.addEventListener('DOMContentLoaded', () => {
     let animationFrameId;
     let lastStateUpdate;
 
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log('Wake lock is active');
+            } catch (err) {
+                console.error('Failed to acquire wake lock:', err);
+            }
+        } else {
+            console.log('Wake Lock API not supported');
+        }
+    }
+
+    function releaseWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release()
+                .then(() => {
+                    wakeLock = null;
+                    console.log('Wake lock released');
+                })
+                .catch(err => {
+                    console.error('Failed to release wake lock:', err);
+                });
+        }
+    }
+
     function togglePlay() {
         state.isPlaying = !state.isPlaying;
         if (state.isPlaying) {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().then(() => {
+                    console.log('AudioContext resumed');
+                });
+            }
             state.totalTime = 0;
             state.countdown = state.phaseTime;
             state.count = 0;
@@ -88,11 +107,13 @@ document.addEventListener('DOMContentLoaded', () => {
             playTone();
             startInterval();
             animate();
+            requestWakeLock();
         } else {
             clearInterval(interval);
             cancelAnimationFrame(animationFrameId);
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            releaseWakeLock();
         }
         render();
     }
@@ -109,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelAnimationFrame(animationFrameId);
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        releaseWakeLock();
         render();
     }
 
@@ -129,9 +151,15 @@ document.addEventListener('DOMContentLoaded', () => {
         state.count = 0;
         state.sessionComplete = false;
         state.timeLimitReached = false;
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('AudioContext resumed');
+            });
+        }
         playTone();
         startInterval();
         animate();
+        requestWakeLock();
         render();
     }
 
@@ -148,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (state.countdown === 1) {
                 state.count = (state.count + 1) % 4;
+                state.pulseStartTime = performance.now();
                 state.countdown = state.phaseTime;
                 playTone();
                 if (state.count === 3 && state.timeLimitReached) {
@@ -155,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.isPlaying = false;
                     clearInterval(interval);
                     cancelAnimationFrame(animationFrameId);
+                    releaseWakeLock();
                 }
             } else {
                 state.countdown -= 1;
@@ -174,12 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const phase = state.count;
         const size = Math.min(canvas.width, canvas.height) * 0.6;
         const left = (canvas.width - size) / 2;
-        const top = (canvas.height - size) / 2 + (canvas.height * 0.1);
+        const top = (canvas.height - size) / 2 + 120;
         const points = [
-            {x: left, y: top + size},       // Bottom-left
-            {x: left, y: top},             // Top-left
-            {x: left + size, y: top},      // Top-right
-            {x: left + size, y: top + size} // Bottom-right
+            {x: left, y: top + size},
+            {x: left, y: top},
+            {x: left + size, y: top},
+            {x: left + size, y: top + size}
         ];
         const startPoint = points[phase];
         const endPoint = points[(phase + 1) % 4];
@@ -192,8 +222,17 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.lineWidth = 2;
         ctx.strokeRect(left, top, size, size);
 
+        let radius = 5;
+        if (state.pulseStartTime !== null) {
+            const pulseElapsed = (performance.now() - state.pulseStartTime) / 1000;
+            if (pulseElapsed < 0.5) {
+                const pulseFactor = Math.sin(Math.PI * pulseElapsed / 0.5);
+                radius = 5 + 5 * pulseFactor;
+            }
+        }
+
         ctx.beginPath();
-        ctx.arc(currentX, currentY, 5, 0, 2 * Math.PI);
+        ctx.arc(currentX, currentY, radius, 0, 2 * Math.PI);
         ctx.fillStyle = '#ff0000';
         ctx.fill();
 
@@ -201,7 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function render() {
-        let html = ''; // Title is now in HTML, so start with empty string
+        let html = `
+            <h1>Box Breathing</h1>
+        `;
         if (state.isPlaying) {
             html += `
                 <div class="timer">Total Time: ${formatTime(state.totalTime)}</div>
@@ -224,12 +265,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="form-group">
                         <input
-                            type="text"
+                            type="number"
                             inputmode="numeric"
-                            pattern="[0-9]*"
                             placeholder="Time limit (minutes)"
                             value="${state.timeLimit}"
                             id="time-limit"
+                            step="1"
+                            min="0"
                         >
                         <label for="time-limit">Minutes (optional)</label>
                     </div>
@@ -281,7 +323,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         app.innerHTML = html;
 
-        // Add event listeners after rendering
         if (!state.sessionComplete) {
             document.getElementById('toggle-play').addEventListener('click', togglePlay);
         }
@@ -292,10 +333,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('sound-toggle').addEventListener('change', toggleSound);
             const timeLimitInput = document.getElementById('time-limit');
             timeLimitInput.addEventListener('input', handleTimeLimitChange);
-            timeLimitInput.addEventListener('focus', function() {
-                this.setAttribute('readonly', 'readonly');
-                setTimeout(() => this.removeAttribute('readonly'), 0);
-            });
             const phaseTimeSlider = document.getElementById('phase-time-slider');
             phaseTimeSlider.addEventListener('input', function() {
                 state.phaseTime = parseInt(this.value);
@@ -307,48 +344,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Initial render
     render();
-
-    // Offline notification handling
-    window.addEventListener('online', updateOfflineStatus);
-    window.addEventListener('offline', updateOfflineStatus);
-
-    function updateOfflineStatus() {
-        const offlineNotification = document.getElementById('offline-notification');
-        if (offlineNotification) {
-            offlineNotification.style.display = navigator.onLine ? 'none' : 'block';
-        }
-    }
-
-    updateOfflineStatus();
-
-    // PWA installation prompt
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        showInstallPromotion();
-    });
-
-    function showInstallPromotion() {
-        const installButton = document.createElement('button');
-        installButton.textContent = 'Install App';
-        installButton.style.position = 'fixed';
-        installButton.style.bottom = '10px';
-        installButton.style.right = '10px';
-        installButton.style.zIndex = '1000';
-        installButton.addEventListener('click', () => {
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then((choiceResult) => {
-                if (choiceResult.outcome === 'accepted') {
-                    console.log('User accepted the install prompt');
-                } else {
-                    console.log('User dismissed the install prompt');
-                }
-                deferredPrompt = null;
-            });
-        });
-        document.body.appendChild(installButton);
-    }
 });
